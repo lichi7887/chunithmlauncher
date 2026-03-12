@@ -51,6 +51,12 @@ public partial class MainWindow : Window
 
     private async void OnLoaded(object sender, RoutedEventArgs e)
     {
+        if (!EnsureWebView2RuntimeInstalled())
+        {
+            Close();
+            return;
+        }
+
         await WebView.EnsureCoreWebView2Async();
         WebView.CoreWebView2.Settings.AreDefaultContextMenusEnabled = false;
         WebView.CoreWebView2.Settings.AreDevToolsEnabled = false;
@@ -63,6 +69,39 @@ public partial class MainWindow : Window
 
         WebView.Source = new Uri(ResolveUiIndexPath());
         ApplyWindowBackdrop();
+    }
+
+    private bool EnsureWebView2RuntimeInstalled()
+    {
+        try
+        {
+            var version = CoreWebView2Environment.GetAvailableBrowserVersionString();
+            if (!string.IsNullOrWhiteSpace(version))
+            {
+                return true;
+            }
+        }
+        catch
+        {
+            // fall through and show install guidance
+        }
+
+        var result = System.Windows.MessageBox.Show(
+            "未检测到 WebView2 Runtime。\n\n为精简项目体积，该运行时需要由用户自行安装。\n\n是否现在打开官方下载页？",
+            "缺少运行时",
+            System.Windows.MessageBoxButton.YesNo,
+            System.Windows.MessageBoxImage.Warning);
+
+        if (result == System.Windows.MessageBoxResult.Yes)
+        {
+            Process.Start(new ProcessStartInfo
+            {
+                FileName = "https://developer.microsoft.com/microsoft-edge/webview2/",
+                UseShellExecute = true,
+            });
+        }
+
+        return false;
     }
 
     private void OnWebMessageReceived(object? sender, CoreWebView2WebMessageReceivedEventArgs e)

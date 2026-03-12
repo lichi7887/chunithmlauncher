@@ -1,0 +1,8 @@
+D:\中二节奏快捷启动器\dist\20260312_202921\ChunithmLauncher.pdb
+D:\中二节奏快捷启动器\dist\20260312_202921\ui\app.js
+D:\中二节奏快捷启动器\dist\20260312_202921\ui\index.html
+D:\中二节奏快捷启动器\dist\20260312_202921\ui\styles.css
+D:\中二节奏快捷启动器\dist\20260312_202921\Microsoft.Web.WebView2.Core.xml
+D:\中二节奏快捷启动器\dist\20260312_202921\Microsoft.Web.WebView2.WinForms.xml
+D:\中二节奏快捷启动器\dist\20260312_202921\Microsoft.Web.WebView2.Wpf.xml
+D:\中二节奏快捷启动器\dist\20260312_202921\ChunithmLauncher.exe

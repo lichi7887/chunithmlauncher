@@ -1,0 +1,173 @@
+﻿<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>中二节奏 快捷启动器</title>
+  <link rel="stylesheet" href="styles.css" />
+</head>
+<body>
+  <div class="scene">
+    <div class="mesh"></div>
+    <div class="grain"></div>
+    <div class="beam"></div>
+    <div class="bg-image" id="bgImage"></div>
+  </div>
+
+  <main class="shell">
+    <header class="topbar reveal" style="--d:0ms">
+      <div class="topbar-right">
+        <div class="status" id="status">
+          <span class="dot"></span>
+          <span class="text">待机</span>
+        </div>
+        <button class="btn ghost" id="btnSettings">设置</button>
+      </div>
+    </header>
+
+    <section class="layout">
+      <aside class="status-card reveal" style="--d:120ms">
+        <div class="card-title">运行状态</div>
+        <div class="stat">
+          <div class="stat-label">分辨率目标</div>
+          <div class="stat-value" id="targetMode">1920×1080 @ 120Hz</div>
+        </div>
+        <div class="stat">
+          <div class="stat-label">原始分辨率</div>
+          <div class="stat-value" id="originalModeCard">未读取</div>
+        </div>
+        <div class="stat">
+          <div class="stat-label">模式</div>
+          <div class="segmented" id="launchMode">
+            <button class="seg active" data-mode="smart">智能切换</button>
+            <button class="seg" data-mode="manual">仅启动</button>
+          </div>
+        </div>
+      </aside>
+
+      <section class="quick reveal" style="--d:180ms">
+        <div class="version-card" id="appVersion">v0.0.0</div>
+      </section>
+
+      <section class="hero reveal" style="--d:240ms">
+        <div class="hero-card">
+          <div class="hero-actions">
+            <button class="btn primary" id="btnLaunch">启动游戏</button>
+            <button class="btn" id="btnTestSwitch" data-state="test">测试切换</button>
+          </div>
+          <div class="hover-info">
+            <div class="hover-item" data-tip="已选择的 start.bat 路径">
+              <span>start.bat</span>
+              <span class="mono" id="startBatHover">未选择</span>
+            </div>
+            <div class="hover-item" data-tip="主显示器名称">
+              <span>主显示器</span>
+              <span class="mono" id="primaryDisplayHover">未选择</span>
+            </div>
+            <div class="hover-item" data-tip="当前原始分辨率">
+              <span>原始分辨率</span>
+              <span class="mono" id="originalModeHover">未读取</span>
+            </div>
+          </div>
+        </div>
+      </section>
+    </section>
+  </main>
+
+  <section class="overlay" id="firstRun">
+    <div class="overlay-card">
+      <div class="overlay-title">欢迎使用 Chunithm Launcher</div>
+      <div class="overlay-desc">首次启动请完成开箱配置：游戏路径与主显示器。目标分辨率固定为 1920×1080 @ 120Hz。</div>
+      <div class="field">
+        <label>start.bat 路径</label>
+        <div class="input-row">
+          <input type="text" id="startBat" placeholder="请选择 start.bat" readonly />
+          <button class="btn small" id="btnPickBat">选择</button>
+        </div>
+      </div>
+      <div class="field">
+        <label>主显示器</label>
+        <div class="input-row">
+          <select id="displaySelect">
+            <option>请先选择</option>
+          </select>
+          <button class="btn small" id="btnDetectDisplays">刷新</button>
+        </div>
+      </div>
+      <div class="actions">
+        <button class="btn primary" id="btnSave">完成配置</button>
+      </div>
+    </div>
+  </section>
+
+  <section class="modal" id="settingsModal">
+    <div class="modal-card">
+      <div class="modal-header">
+        <div>
+          <div class="modal-title">设置</div>
+          <div class="modal-sub">仅在需要时修改。</div>
+        </div>
+        <button class="btn ghost" id="btnCloseSettings">关闭</button>
+      </div>
+      <div class="modal-body">
+        <div class="panel">
+          <div class="panel-title">启动与分辨率</div>
+          <div class="field">
+            <label>start.bat 路径</label>
+            <div class="input-row">
+              <input type="text" id="startBatSetting" placeholder="请选择 start.bat" readonly />
+              <button class="btn small" id="btnPickBatSetting">选择</button>
+            </div>
+          </div>
+          <div class="field">
+            <label>主显示器</label>
+            <div class="input-row">
+              <select id="displaySelectSetting">
+                <option>请先选择</option>
+              </select>
+              <button class="btn small" id="btnDetectDisplaysSetting">刷新</button>
+            </div>
+          </div>
+          <div class="field">
+            <label>原始分辨率</label>
+            <div class="input-row">
+              <input type="text" id="originalModeInputSetting" placeholder="例如 2560×1440 @ 144Hz" />
+              <button class="btn small" id="btnReadCurrentSetting">读取</button>
+            </div>
+          </div>
+          <div class="field">
+            <label>目标分辨率（固定）</label>
+            <div class="input-row">
+              <input type="text" value="1920×1080 @ 120Hz" readonly />
+            </div>
+          </div>
+        </div>
+
+        <div class="panel">
+          <div class="panel-title">外观</div>
+          <div class="field">
+            <label>主题色</label>
+            <div class="input-row">
+              <input type="color" id="themeColor" value="#fdd500" />
+              <input type="text" id="themeColorText" value="#fdd500" />
+            </div>
+          </div>
+          <div class="field">
+            <label>背景图片（本地路径或 URL）</label>
+            <div class="input-row">
+              <input type="text" id="bgImageInput" placeholder="例如 C:\\images\\bg.jpg 或 https://..." />
+              <button class="btn small" id="btnBrowseBg">浏览</button>
+              <button class="btn small" id="btnApplyBg">应用</button>
+            </div>
+          </div>
+        </div>
+      </div>
+      <div class="modal-actions">
+        <button class="btn primary" id="btnSaveSettings">保存设置</button>
+      </div>
+    </div>
+  </section>
+
+  <script src="app.js"></script>
+</body>
+</html>

@@ -37,8 +37,6 @@ powershell -ExecutionPolicy Bypass -File .\\publish.ps1
 
 ## 界面截图
 
-将截图放到仓库 `docs/images/` 后，可直接使用 GitHub 图床链接：
-
 ### 默认背景
 
 ![默认背景](https://raw.githubusercontent.com/lichi7887/chunithmlauncher/refs/heads/main/docs/image/screenshot-dark.png)

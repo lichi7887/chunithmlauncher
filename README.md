@@ -1,19 +1,51 @@
 ﻿# CHUNITHM Launcher
 
-## 说明
-
 基于 WebView2 的 CHUNITHM HDD 快捷启动器：启动前切换分辨率，检测游戏窗口关闭后恢复，并提供首次配置向导与主题化 UI。
 
-本项目由 **vibecoding** 完整开发。
+## 项目声明
 
-项目作者在法律允许范围内放弃对本项目代码及相关内容的全部权利，将其贡献至公共领域（Public Domain）。
+- 本项目由 **vibecoding** 完整开发
+- 项目作者在法律允许范围内放弃对本项目代码及相关内容的全部权利，并贡献至公共领域（Public Domain）
+
+## 功能特性
+
+- 启动游戏前自动切换目标分辨率
+- 监测游戏窗口关闭后自动恢复原分辨率
+- 首次配置向导与可视化设置界面
+- 主题化 UI，支持背景图自定义
 
 ## 轻量化策略
 
 为精简项目体积，仓库与发布内容不再内置完整运行时：
 
 - `WebView2 Runtime` 由用户在运行时按提示自行下载并安装
-- 发布采用 framework-dependent 模式（不打包 .NET 运行时）
+- 发布采用 framework-dependent 模式（不打包 .NET Runtime）
+
+## 使用方式
+
+### 1. 本地编译
+
+```powershell
+dotnet build .\\ChunithmLauncher\\ChunithmLauncher.csproj -c Release
+```
+
+### 2. 发布
+
+```powershell
+powershell -ExecutionPolicy Bypass -File .\\publish.ps1
+```
+
+## 界面截图
+
+将截图放到仓库 `docs/images/` 后，可直接使用 GitHub 图床链接：
+
+### 默认背景
+
+![默认背景](https://raw.githubusercontent.com/<你的用户名>/<你的仓库名>/<分支名>/docs/images/screenshot-dark.png)
+
+### 自定义背景
+
+![自定义背景](https://raw.githubusercontent.com/<你的用户名>/<你的仓库名>/<分支名>/docs/images/screenshot-wallpaper.png)
 
 ## 开源许可证
 

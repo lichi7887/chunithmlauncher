@@ -1,0 +1,85 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>CHUNITHM Launcher</title>
+  <link rel="stylesheet" href="styles.css" />
+</head>
+<body>
+  <div id="app" class="app enter">
+    <div class="bg-layer"></div>
+    <aside class="config-summary card">
+      <h2>配置摘要</h2>
+      <div id="summary"></div>
+      <button id="openSettings" class="ghost">设置</button>
+    </aside>
+
+    <main class="main-panel card">
+      <header>
+        <p class="eyebrow">CHUNITHM</p>
+        <h1>快速启动与分辨率管理</h1>
+      </header>
+      <p class="desc" title="启动前切换到目标分辨率，检测游戏窗口关闭后自动恢复原始分辨率。">
+        鼠标悬停可查看详细策略。
+      </p>
+
+      <div class="actions-bottom-right">
+        <button id="launchBtn" class="primary big">启动游戏</button>
+      </div>
+
+      <div class="status-card card-mini" id="statusCard">
+        <strong>运行状态</strong>
+        <p id="runtimeStatus">待机中</p>
+        <div class="small-actions">
+          <button id="testBtn" class="accent">测试切换</button>
+          <button id="restoreBtn" class="ghost">恢复原始分辨率</button>
+        </div>
+      </div>
+
+      <footer>
+        <span id="version"></span>
+      </footer>
+    </main>
+  </div>
+
+  <dialog id="wizardDialog" class="modal">
+    <form method="dialog" class="modal-content">
+      <h3>首次配置向导</h3>
+      <label>start.bat 路径 <input id="batPath" type="text" placeholder="C:\\Game\\start.bat" /></label>
+      <label>主显示器 <select id="monitorSelect"></select></label>
+      <p class="hint">首次将读取当前分辨率并保存为原始分辨率。</p>
+      <menu>
+        <button id="wizardSave" value="default" class="primary">保存并进入</button>
+      </menu>
+    </form>
+  </dialog>
+
+  <dialog id="settingsDialog" class="modal">
+    <form method="dialog" class="modal-content">
+      <h3>设置</h3>
+      <label>start.bat 路径 <input id="setBat" type="text" /></label>
+      <label>主显示器 <select id="setMonitor"></select></label>
+      <div class="split">
+        <label>目标宽度 <input id="targetW" type="number" min="800" /></label>
+        <label>目标高度 <input id="targetH" type="number" min="600" /></label>
+        <label>刷新率 <input id="targetR" type="number" min="30" /></label>
+      </div>
+      <label>窗口标题 <input id="windowTitle" type="text" /></label>
+      <label>主题色
+        <div class="theme-row">
+          <input id="themePicker" type="color" />
+          <input id="themeHex" type="text" placeholder="#fdd500" />
+        </div>
+      </label>
+      <label>背景图（URL 或本地路径） <input id="bgSource" type="text" /></label>
+      <label>浏览本地图片 <input id="bgLocal" type="file" accept="image/*" /></label>
+      <menu>
+        <button id="settingsSave" class="primary">保存设置</button>
+      </menu>
+    </form>
+  </dialog>
+
+  <script src="app.js"></script>
+</body>
+</html>

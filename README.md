@@ -41,11 +41,11 @@ powershell -ExecutionPolicy Bypass -File .\\publish.ps1
 
 ### 默认背景
 
-![默认背景](https://raw.githubusercontent.com/<你的用户名>/<你的仓库名>/<分支名>/docs/images/screenshot-dark.png)
+![默认背景](https://raw.githubusercontent.com/lichi7887/chunithmlauncher/refs/heads/main/docs/image/screenshot-dark.png)
 
 ### 自定义背景
 
-![自定义背景](https://raw.githubusercontent.com/<你的用户名>/<你的仓库名>/<分支名>/docs/images/screenshot-wallpaper.png)
+![自定义背景](https://raw.githubusercontent.com/lichi7887/chunithmlauncher/refs/heads/main/docs/image/screenshot-wallpaper.png)
 
 ## 开源许可证
 

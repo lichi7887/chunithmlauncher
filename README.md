@@ -25,9 +25,7 @@
 
 ### 1. 本地编译
 
-```powershell
-dotnet build .\\ChunithmLauncher\\ChunithmLauncher.csproj -c Release
-```
+直接运行`publish.ps1`即可，产物在`artifacts\publish`目录下
 
 ### 2. 发布
 

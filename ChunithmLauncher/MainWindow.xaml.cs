@@ -160,6 +160,9 @@ public partial class MainWindow : Window
             case "open-game-folder":
                 OpenGameFolder();
                 break;
+            case "open-segatools-ini":
+                OpenSegatoolsIniInVsCode();
+                break;
             case "set-launch-mode":
                 if (message.Payload.TryGetProperty("mode", out var modeElement))
                 {
@@ -369,6 +372,106 @@ public partial class MainWindow : Window
         Process.Start(new ProcessStartInfo("explorer", args) { UseShellExecute = true });
     }
 
+    private void OpenSegatoolsIniInVsCode()
+    {
+        if (string.IsNullOrWhiteSpace(_startBatPath))
+        {
+            SetStatus("尚未选择 start.bat", "#ff5a6a");
+            return;
+        }
+
+        var gameDir = Path.GetDirectoryName(_startBatPath);
+        if (string.IsNullOrWhiteSpace(gameDir))
+        {
+            SetStatus("无法解析游戏目录", "#ff5a6a");
+            return;
+        }
+
+        var iniPath = Path.Combine(gameDir, "segatools.ini");
+        if (!File.Exists(iniPath))
+        {
+            SetStatus("未找到 segatools.ini", "#ff5a6a");
+            return;
+        }
+
+        var opened = TryOpenInPreferredEditor(iniPath);
+        if (opened)
+        {
+            SetStatus("已打开 segatools.ini", "#7dffa0");
+        }
+        else
+        {
+            System.Windows.MessageBox.Show(
+                "你电脑连个可视化编辑器都没有？😅\n赶紧去下一个vscode！！！",
+                "缺少编辑器",
+                System.Windows.MessageBoxButton.OK,
+                System.Windows.MessageBoxImage.Warning);
+
+            try
+            {
+                Process.Start(new ProcessStartInfo
+                {
+                    FileName = "https://code.visualstudio.com/",
+                    UseShellExecute = true,
+                });
+            }
+            catch
+            {
+                // ignore browser open failures
+            }
+
+            SetStatus("未检测到可用编辑器，已打开 VS Code 下载页", "#ff5a6a");
+        }
+    }
+
+    private static bool TryOpenInPreferredEditor(string filePath)
+    {
+        var candidates = new[]
+        {
+            // VS Code
+            "code",
+            "code.cmd",
+            "code.exe",
+            @"C:\Program Files\Microsoft VS Code\Code.exe",
+            @"C:\Program Files (x86)\Microsoft VS Code\Code.exe",
+
+            // Notepad++
+            "notepad++",
+            "notepad++.exe",
+            @"C:\Program Files\Notepad++\notepad++.exe",
+            @"C:\Program Files (x86)\Notepad++\notepad++.exe",
+
+            // Sublime Text
+            "subl",
+            "subl.exe",
+            "sublime_text",
+            "sublime_text.exe",
+            @"C:\Program Files\Sublime Text\sublime_text.exe",
+            @"C:\Program Files\Sublime Text 3\sublime_text.exe",
+            @"C:\Program Files\Sublime Text 4\sublime_text.exe",
+        };
+
+        foreach (var candidate in candidates)
+        {
+            try
+            {
+                Process.Start(new ProcessStartInfo
+                {
+                    FileName = candidate,
+                    Arguments = $"\"{filePath}\"",
+                    UseShellExecute = true,
+                });
+                return true;
+            }
+            catch
+            {
+                // try next candidate
+            }
+        }
+
+        return false;
+    }
+
     private async Task LaunchGameAsync()
     {
         if (_isLaunching)
@@ -394,6 +497,7 @@ public partial class MainWindow : Window
 
         _ = DisplayModeHelper.TryGetCurrentMode(deviceName, out _, out var currentStruct);
         _lastKnownOriginalMode = currentStruct;
+        var title = string.IsNullOrWhiteSpace(_gameWindowTitle) ? DefaultGameWindowTitle : _gameWindowTitle;
 
         if (_launchMode == "smart")
         {
@@ -411,6 +515,9 @@ public partial class MainWindow : Window
                 _isLaunching = false;
                 return;
             }
+
+            SetStatus("分辨率已切换，3秒后启动游戏...", "#5ee7ff");
+            await Task.Delay(3000);
         }
 
         try
@@ -436,7 +543,6 @@ public partial class MainWindow : Window
 
         if (_launchMode == "smart")
         {
-            var title = string.IsNullOrWhiteSpace(_gameWindowTitle) ? DefaultGameWindowTitle : _gameWindowTitle;
             SetStatus("等待游戏窗口...", "#5ee7ff");
             var windowFound = await WaitForWindowAsync(title, TimeSpan.FromSeconds(120));
             if (windowFound == IntPtr.Zero)
@@ -448,7 +554,7 @@ public partial class MainWindow : Window
             }
 
             SetStatus("游戏运行中...", "#7dffa0");
-            await WaitForWindowCloseAsync(title);
+            await WaitForGameExitAsync(windowFound, title);
             await RestoreOriginalAsync();
         }
 
@@ -588,16 +694,76 @@ public partial class MainWindow : Window
         return IntPtr.Zero;
     }
 
-    private static async Task WaitForWindowCloseAsync(string title)
+    private static async Task WaitForWindowCloseAsync(string title, TimeSpan missingGracePeriod)
     {
-        while (FindWindow(null, title) != IntPtr.Zero)
+        DateTime? missingSince = null;
+
+        while (true)
         {
+            var handle = FindWindow(null, title);
+            if (handle != IntPtr.Zero)
+            {
+                missingSince = null;
+                await Task.Delay(1000);
+                continue;
+            }
+
+            missingSince ??= DateTime.UtcNow;
+            if (DateTime.UtcNow - missingSince.Value >= missingGracePeriod)
+            {
+                return;
+            }
+
             await Task.Delay(1000);
         }
     }
 
+    private static async Task WaitForGameExitAsync(IntPtr windowHandle, string title)
+    {
+        if (TryGetProcessIdFromWindow(windowHandle, out var processId))
+        {
+            try
+            {
+                using var process = Process.GetProcessById(processId);
+                while (!process.HasExited)
+                {
+                    await Task.Delay(1000);
+                }
+
+                return;
+            }
+            catch
+            {
+                // fallback to window-title based detection
+            }
+        }
+
+        await WaitForWindowCloseAsync(title, TimeSpan.FromSeconds(8));
+    }
+
+    private static bool TryGetProcessIdFromWindow(IntPtr windowHandle, out int processId)
+    {
+        processId = 0;
+        if (windowHandle == IntPtr.Zero)
+        {
+            return false;
+        }
+
+        _ = GetWindowThreadProcessId(windowHandle, out var pid);
+        if (pid == 0)
+        {
+            return false;
+        }
+
+        processId = (int)pid;
+        return true;
+    }
+
     [DllImport("user32.dll", CharSet = CharSet.Auto)]
     private static extern IntPtr FindWindow(string? lpClassName, string? lpWindowName);
+
+    [DllImport("user32.dll")]
+    private static extern uint GetWindowThreadProcessId(IntPtr hWnd, out uint lpdwProcessId);
 
     [DllImport("dwmapi.dll")]
     private static extern int DwmSetWindowAttribute(IntPtr hwnd, int dwAttribute, ref int pvAttribute, int cbAttribute);
@@ -817,6 +983,7 @@ public partial class MainWindow : Window
         private const int DmPelsWidth = 0x80000;
         private const int DmPelsHeight = 0x100000;
         private const int DmDisplayFrequency = 0x400000;
+        private const int CdsUpdateRegistry = 0x00000001;
         private const int CdsFullscreen = 0x00000004;
 
         [DllImport("user32.dll", CharSet = CharSet.Auto)]
@@ -899,7 +1066,16 @@ public partial class MainWindow : Window
             devMode.dmDisplayFrequency = mode.Frequency;
             devMode.dmFields = DmPelsWidth | DmPelsHeight | DmDisplayFrequency;
 
-            var result = ChangeDisplaySettingsEx(deviceName, ref devMode, IntPtr.Zero, CdsFullscreen, IntPtr.Zero);
+            // Persist resolution changes so they survive app focus switches (e.g. Alt+Tab / Win+D).
+            var persistentFlags = CdsUpdateRegistry | CdsFullscreen;
+            var result = ChangeDisplaySettingsEx(deviceName, ref devMode, IntPtr.Zero, persistentFlags, IntPtr.Zero);
+            if (result == DispChangeSuccessful)
+            {
+                return true;
+            }
+
+            // Fallback to temporary apply if persisting fails on some environments.
+            result = ChangeDisplaySettingsEx(deviceName, ref devMode, IntPtr.Zero, CdsFullscreen, IntPtr.Zero);
             return result == DispChangeSuccessful;
         }
     }

@@ -727,6 +727,7 @@ public partial class MainWindow : Window
             if (!DisplayModeHelper.TrySetMode(deviceName, target))
             {
                 SetStatus("切换分辨率失败", "#ff5a6a");
+                ShowResolutionSwitchFailedDialog();
                 if (originalDisplayStates is not null)
                 {
                     RestoreDisplayStatesWithFallback(originalDisplayStates);
@@ -819,6 +820,15 @@ public partial class MainWindow : Window
         SetStatus("智慧显示器：已恢复显示器布局", "#7dffa0");
     }
 
+    private static void ShowResolutionSwitchFailedDialog()
+    {
+        System.Windows.MessageBox.Show(
+            "切换失败！请确认显示器为16:9布局\n请确保显示器支持1080p120hz",
+            "分辨率切换失败",
+            System.Windows.MessageBoxButton.OK,
+            System.Windows.MessageBoxImage.Warning);
+    }
+
     private async Task TestSwitchAsync()
     {
         var deviceName = _primaryDisplayId ?? WinForms.Screen.PrimaryScreen?.DeviceName;
@@ -843,6 +853,7 @@ public partial class MainWindow : Window
         if (!DisplayModeHelper.TrySetMode(deviceName, target))
         {
             SetStatus("切换失败", "#ff5a6a");
+            ShowResolutionSwitchFailedDialog();
             SetTestSwitchState(false);
             return;
         }

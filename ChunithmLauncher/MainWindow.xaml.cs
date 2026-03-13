@@ -303,7 +303,15 @@ public partial class MainWindow : Window
 
         foreach (var screen in screens)
         {
-            var label = $"{screen.DeviceName} ({screen.Bounds.Width}x{screen.Bounds.Height})";
+            var width = screen.Bounds.Width;
+            var height = screen.Bounds.Height;
+            if (DisplayModeHelper.TryGetCurrentMode(screen.DeviceName, out _, out var currentMode))
+            {
+                width = currentMode.Width;
+                height = currentMode.Height;
+            }
+
+            var label = $"{screen.DeviceName} ({width}x{height})";
             _displays.Add(new DisplayInfo(screen.DeviceName, label, screen.DeviceName == _primaryDisplayId));
         }
     }

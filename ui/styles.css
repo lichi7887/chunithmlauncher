@@ -298,6 +298,27 @@ body {
   box-shadow: 0 8px 20px rgba(0, 0, 0, 0.26);
 }
 
+.smart-display-toggle {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 10px;
+  border-radius: 999px;
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  background: rgba(8, 9, 14, 0.45);
+  font-size: 12px;
+  color: var(--ink);
+  font-family: "HarmonyOS Sans", "MiSans", "Microsoft YaHei UI", sans-serif;
+  cursor: pointer;
+}
+
+.smart-display-toggle input[type="checkbox"] {
+  width: 14px;
+  height: 14px;
+  margin: 0;
+  accent-color: var(--accent);
+}
+
 .panel {
   background: var(--panel);
   border: 1px solid var(--panel-border);

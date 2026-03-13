@@ -14,6 +14,7 @@
   startBatSetting: document.getElementById('startBatSetting'),
   displaySelectSetting: document.getElementById('displaySelectSetting'),
   originalModeInputSetting: document.getElementById('originalModeInputSetting'),
+  smartDisplayToggle: document.getElementById('smartDisplayToggle'),
   themeColor: document.getElementById('themeColor'),
   themeColorText: document.getElementById('themeColorText'),
   startBatHover: document.getElementById('startBatHover'),
@@ -269,6 +270,12 @@ segs.forEach((seg) => seg.addEventListener('click', () => {
   post('set-launch-mode', { mode: seg.dataset.mode });
 }));
 
+if (ui.smartDisplayToggle) {
+  ui.smartDisplayToggle.addEventListener('change', () => {
+    post('set-smart-display', { enabled: !!ui.smartDisplayToggle.checked });
+  });
+}
+
 const handleHostMessage = (event) => {
   const data = event.data || event;
   const { type, payload } = data || {};
@@ -289,6 +296,10 @@ const handleHostMessage = (event) => {
 
       if (payload.targetMode) {
         if (ui.targetMode) ui.targetMode.textContent = payload.targetMode;
+      }
+
+      if (ui.smartDisplayToggle) {
+        ui.smartDisplayToggle.checked = !!payload.smartDisplayEnabled;
       }
 
       if (payload.primaryDisplayName && ui.primaryDisplayHover) ui.primaryDisplayHover.textContent = payload.primaryDisplayName;

@@ -35,6 +35,7 @@ public partial class MainWindow : Window
     private const string DefaultGameWindowTitle = "teaGfx DirectX Release";
     private string _gameWindowTitle = DefaultGameWindowTitle;
     private string? _backgroundImagePath;
+    private bool _smartDisplayEnabled;
 
     private Config _config = new();
     private bool _isLaunching;
@@ -173,6 +174,14 @@ public partial class MainWindow : Window
                     PersistConfig();
                 }
                 break;
+            case "set-smart-display":
+                if (message.Payload.TryGetProperty("enabled", out var enabledElement)
+                    && enabledElement.ValueKind is JsonValueKind.True or JsonValueKind.False)
+                {
+                    _smartDisplayEnabled = enabledElement.GetBoolean();
+                    PersistConfig();
+                }
+                break;
             case "set-theme":
                 if (message.Payload.TryGetProperty("color", out var colorElement))
                 {
@@ -217,6 +226,7 @@ public partial class MainWindow : Window
         _config.OriginalMode = _originalMode;
         _config.TargetMode = _targetMode;
         _config.LaunchMode = _launchMode;
+        _config.SmartDisplayEnabled = _smartDisplayEnabled;
         _config.ThemeColor = _themeColor;
         _config.GameWindowTitle = _gameWindowTitle;
         _config.BackgroundImagePath = _backgroundImagePath;
@@ -240,6 +250,7 @@ public partial class MainWindow : Window
         if (!string.IsNullOrWhiteSpace(_config.PrimaryDisplayId)) _primaryDisplayId = _config.PrimaryDisplayId;
         if (!string.IsNullOrWhiteSpace(_config.OriginalMode)) _originalMode = _config.OriginalMode;
         if (!string.IsNullOrWhiteSpace(_config.LaunchMode)) _launchMode = _config.LaunchMode;
+        _smartDisplayEnabled = _config.SmartDisplayEnabled;
         if (!string.IsNullOrWhiteSpace(_config.ThemeColor)) _themeColor = _config.ThemeColor;
         if (!string.IsNullOrWhiteSpace(_config.GameWindowTitle)) _gameWindowTitle = _config.GameWindowTitle;
         if (!string.IsNullOrWhiteSpace(_config.BackgroundImagePath)) _backgroundImagePath = _config.BackgroundImagePath;
@@ -672,12 +683,42 @@ public partial class MainWindow : Window
         _ = DisplayModeHelper.TryGetCurrentMode(deviceName, out _, out var currentStruct);
         _lastKnownOriginalMode = currentStruct;
         var title = string.IsNullOrWhiteSpace(_gameWindowTitle) ? DefaultGameWindowTitle : _gameWindowTitle;
+        List<DisplayModeHelper.DisplayState>? originalDisplayStates = null;
+
+        if (_smartDisplayEnabled)
+        {
+            originalDisplayStates = DisplayModeHelper.CaptureCurrentDisplayStates();
+            if (originalDisplayStates.Count == 0)
+            {
+                originalDisplayStates = null;
+                SetStatus("智慧显示器：读取当前显示配置失败", "#ffb36a");
+            }
+            else
+            {
+                var primaryToApply = _primaryDisplayId ?? deviceName;
+                SetStatus("智慧显示器：切换主显示器并启用仅主屏...", "#5ee7ff");
+                if (!DisplayModeHelper.TryApplyPrimaryOnly(primaryToApply))
+                {
+                    originalDisplayStates = null;
+                    SetStatus("智慧显示器：切换失败，继续启动", "#ffb36a");
+                }
+                else
+                {
+                    DetectDisplays();
+                    SendInit();
+                }
+            }
+        }
 
         if (_launchMode == "smart")
         {
             if (!DisplayMode.TryParse(_targetMode, out var target))
             {
                 SetStatus("目标分辨率格式错误", "#ff5a6a");
+                if (originalDisplayStates is not null)
+                {
+                    RestoreDisplayStatesWithFallback(originalDisplayStates);
+                }
                 _isLaunching = false;
                 return;
             }
@@ -686,6 +727,10 @@ public partial class MainWindow : Window
             if (!DisplayModeHelper.TrySetMode(deviceName, target))
             {
                 SetStatus("切换分辨率失败", "#ff5a6a");
+                if (originalDisplayStates is not null)
+                {
+                    RestoreDisplayStatesWithFallback(originalDisplayStates);
+                }
                 _isLaunching = false;
                 return;
             }
@@ -711,6 +756,10 @@ public partial class MainWindow : Window
         catch
         {
             SetStatus("启动失败", "#ff5a6a");
+            if (originalDisplayStates is not null)
+            {
+                RestoreDisplayStatesWithFallback(originalDisplayStates);
+            }
             _isLaunching = false;
             return;
         }
@@ -723,6 +772,10 @@ public partial class MainWindow : Window
             {
                 SetStatus("未检测到游戏窗口", "#ff5a6a");
                 await RestoreOriginalAsync();
+                if (originalDisplayStates is not null)
+                {
+                    RestoreDisplayStatesWithFallback(originalDisplayStates);
+                }
                 _isLaunching = false;
                 return;
             }
@@ -730,9 +783,40 @@ public partial class MainWindow : Window
             SetStatus("游戏运行中...", "#7dffa0");
             await WaitForGameExitAsync(windowFound, title);
             await RestoreOriginalAsync();
+            if (originalDisplayStates is not null)
+            {
+                RestoreDisplayStatesWithFallback(originalDisplayStates);
+            }
+        }
+        else if (originalDisplayStates is not null)
+        {
+            _ = RestoreDisplayStatesAfterGameExitAsync(title, originalDisplayStates);
         }
 
         _isLaunching = false;
+    }
+
+    private async Task RestoreDisplayStatesAfterGameExitAsync(string title, IReadOnlyCollection<DisplayModeHelper.DisplayState> states)
+    {
+        var windowFound = await WaitForWindowAsync(title, TimeSpan.FromSeconds(180));
+        if (windowFound != IntPtr.Zero)
+        {
+            await WaitForGameExitAsync(windowFound, title);
+        }
+
+        RestoreDisplayStatesWithFallback(states);
+    }
+
+    private void RestoreDisplayStatesWithFallback(IReadOnlyCollection<DisplayModeHelper.DisplayState> states)
+    {
+        if (!DisplayModeHelper.TryRestoreDisplayStates(states))
+        {
+            DisplayModeHelper.TrySwitchToExtendedMode();
+        }
+
+        DetectDisplays();
+        SendInit();
+        SetStatus("智慧显示器：已恢复显示器布局", "#7dffa0");
     }
 
     private async Task TestSwitchAsync()
@@ -953,6 +1037,7 @@ public partial class MainWindow : Window
             originalMode = _originalMode ?? string.Empty,
             targetMode = _targetMode,
             primaryDisplayName = _primaryDisplayName ?? "未选择",
+            smartDisplayEnabled = _smartDisplayEnabled,
             themeColor = _themeColor,
             backgroundImagePath = _backgroundImagePath ?? string.Empty,
             version = GetAppVersion(),
@@ -1118,6 +1203,7 @@ public partial class MainWindow : Window
         public string? OriginalMode { get; set; }
         public string? TargetMode { get; set; }
         public string? LaunchMode { get; set; }
+        public bool SmartDisplayEnabled { get; set; }
         public string? ThemeColor { get; set; }
         public string? GameWindowTitle { get; set; }
         public string? BackgroundImagePath { get; set; }
@@ -1157,7 +1243,9 @@ public partial class MainWindow : Window
         private const int DmPelsWidth = 0x80000;
         private const int DmPelsHeight = 0x100000;
         private const int DmDisplayFrequency = 0x400000;
+        private const int DmPosition = 0x20;
         private const int CdsUpdateRegistry = 0x00000001;
+        private const int CdsNoReset = 0x10000000;
         private const int CdsFullscreen = 0x00000004;
 
         [DllImport("user32.dll", CharSet = CharSet.Auto)]
@@ -1167,6 +1255,14 @@ public partial class MainWindow : Window
         private static extern int ChangeDisplaySettingsEx(
             string lpszDeviceName,
             ref DEVMODE lpDevMode,
+            IntPtr hwnd,
+            int dwflags,
+            IntPtr lParam);
+
+        [DllImport("user32.dll", CharSet = CharSet.Auto)]
+        private static extern int ChangeDisplaySettingsEx(
+            string? lpszDeviceName,
+            IntPtr lpDevMode,
             IntPtr hwnd,
             int dwflags,
             IntPtr lParam);
@@ -1209,6 +1305,140 @@ public partial class MainWindow : Window
             public int dmReserved2;
             public int dmPanningWidth;
             public int dmPanningHeight;
+        }
+
+        public readonly record struct DisplayState(
+            string DeviceName,
+            int PositionX,
+            int PositionY,
+            int Width,
+            int Height,
+            int Frequency);
+
+        public static List<DisplayState> CaptureCurrentDisplayStates()
+        {
+            var states = new List<DisplayState>();
+            foreach (var screen in WinForms.Screen.AllScreens)
+            {
+                var devMode = new DEVMODE { dmSize = (short)Marshal.SizeOf(typeof(DEVMODE)) };
+                if (!EnumDisplaySettings(screen.DeviceName, EnumCurrentSettings, ref devMode))
+                {
+                    continue;
+                }
+
+                states.Add(new DisplayState(
+                    screen.DeviceName,
+                    devMode.dmPositionX,
+                    devMode.dmPositionY,
+                    devMode.dmPelsWidth,
+                    devMode.dmPelsHeight,
+                    devMode.dmDisplayFrequency > 0 ? devMode.dmDisplayFrequency : 60));
+            }
+
+            return states;
+        }
+
+        public static bool TryApplyPrimaryOnly(string primaryDisplayId)
+        {
+            var screens = WinForms.Screen.AllScreens;
+            if (screens.Length <= 1)
+            {
+                return true;
+            }
+
+            var exists = screens.Any(s => string.Equals(s.DeviceName, primaryDisplayId, StringComparison.OrdinalIgnoreCase));
+            if (!exists)
+            {
+                primaryDisplayId = screens.FirstOrDefault(s => s.Primary)?.DeviceName ?? screens[0].DeviceName;
+            }
+
+            foreach (var screen in screens)
+            {
+                var devMode = new DEVMODE { dmSize = (short)Marshal.SizeOf(typeof(DEVMODE)) };
+                if (!EnumDisplaySettings(screen.DeviceName, EnumCurrentSettings, ref devMode))
+                {
+                    continue;
+                }
+
+                if (string.Equals(screen.DeviceName, primaryDisplayId, StringComparison.OrdinalIgnoreCase))
+                {
+                    devMode.dmPositionX = 0;
+                    devMode.dmPositionY = 0;
+                    devMode.dmFields = DmPosition | DmPelsWidth | DmPelsHeight | DmDisplayFrequency;
+                }
+                else
+                {
+                    devMode.dmPositionX = 0;
+                    devMode.dmPositionY = 0;
+                    devMode.dmPelsWidth = 0;
+                    devMode.dmPelsHeight = 0;
+                    devMode.dmFields = DmPosition | DmPelsWidth | DmPelsHeight;
+                }
+
+                var result = ChangeDisplaySettingsEx(
+                    screen.DeviceName,
+                    ref devMode,
+                    IntPtr.Zero,
+                    CdsUpdateRegistry | CdsNoReset,
+                    IntPtr.Zero);
+                if (result != DispChangeSuccessful)
+                {
+                    return false;
+                }
+            }
+
+            return ChangeDisplaySettingsEx(null, IntPtr.Zero, IntPtr.Zero, 0, IntPtr.Zero) == DispChangeSuccessful;
+        }
+
+        public static bool TryRestoreDisplayStates(IReadOnlyCollection<DisplayState> states)
+        {
+            foreach (var state in states)
+            {
+                var devMode = new DEVMODE
+                {
+                    dmSize = (short)Marshal.SizeOf(typeof(DEVMODE)),
+                    dmPositionX = state.PositionX,
+                    dmPositionY = state.PositionY,
+                    dmPelsWidth = state.Width,
+                    dmPelsHeight = state.Height,
+                    dmDisplayFrequency = state.Frequency,
+                    dmFields = DmPosition | DmPelsWidth | DmPelsHeight | DmDisplayFrequency,
+                };
+
+                var result = ChangeDisplaySettingsEx(
+                    state.DeviceName,
+                    ref devMode,
+                    IntPtr.Zero,
+                    CdsUpdateRegistry | CdsNoReset,
+                    IntPtr.Zero);
+                if (result != DispChangeSuccessful)
+                {
+                    return false;
+                }
+            }
+
+            return ChangeDisplaySettingsEx(null, IntPtr.Zero, IntPtr.Zero, 0, IntPtr.Zero) == DispChangeSuccessful;
+        }
+
+        public static bool TrySwitchToExtendedMode()
+        {
+            try
+            {
+                using var process = Process.Start(new ProcessStartInfo
+                {
+                    FileName = "DisplaySwitch.exe",
+                    Arguments = "/extend",
+                    UseShellExecute = true,
+                    CreateNoWindow = true,
+                    WindowStyle = ProcessWindowStyle.Hidden,
+                });
+                process?.WaitForExit(5000);
+                return true;
+            }
+            catch
+            {
+                return false;
+            }
         }
 
         public static bool TryGetCurrentMode(string deviceName, out string mode, out DisplayMode modeStruct)

@@ -23,15 +23,10 @@
 
 ## 使用方式
 
-### 1. 本地编译
+### 本地编译
 
 直接运行`publish.ps1`即可，产物在`artifacts\publish`目录下
 
-### 2. 发布
-
-```powershell
-powershell -ExecutionPolicy Bypass -File .\\publish.ps1
-```
 
 ## 界面截图
 

@@ -1,6 +1,10 @@
 ﻿const ui = {
   statusText: document.querySelector('#status .text'),
   statusDot: document.querySelector('#status .dot'),
+  updateProgressPanel: document.getElementById('updateProgressPanel'),
+  updateProgressText: document.getElementById('updateProgressText'),
+  updateProgressSpeed: document.getElementById('updateProgressSpeed'),
+  updateProgressFill: document.getElementById('updateProgressFill'),
   testSwitchButton: document.getElementById('btnTestSwitch'),
   originalModeCard: document.getElementById('originalModeCard'),
   targetMode: document.getElementById('targetMode'),
@@ -48,6 +52,17 @@ const setStatus = (text, color = '#7dffa0') => {
   ui.statusText.textContent = text;
   ui.statusDot.style.background = color;
   ui.statusDot.style.boxShadow = `0 0 10px ${color}`;
+};
+
+const setUpdateProgress = (active, text, percent, speedText) => {
+  if (!ui.updateProgressPanel) return;
+  ui.updateProgressPanel.classList.toggle('show', !!active);
+  if (ui.updateProgressText && text) ui.updateProgressText.textContent = text;
+  if (ui.updateProgressSpeed && speedText) ui.updateProgressSpeed.textContent = speedText;
+  if (ui.updateProgressFill) {
+    const p = Math.max(0, Math.min(100, Number(percent) || 0));
+    ui.updateProgressFill.style.width = `${p}%`;
+  }
 };
 
 const isValidPrimaryDisplay = (value) => {
@@ -248,6 +263,8 @@ onClick('btnEditSegatoolsIni', () => post('open-segatools-ini'));
 onClick('btnApplyRecommendedSegatools', () => post('apply-recommended-segatools-gfx'));
 onClick('btnDetectDisplaysSetting', () => post('detect-displays'));
 onClick('btnReadCurrentSetting', () => post('read-current-mode'));
+onClick('btnCheckUpdate', () => post('check-update'));
+onClick('btnOpenGithubHome', () => post('open-github-home'));
 onClick('btnSaveSettings', () => {
   post('save-settings', {
     startBatPath: ui.startBatSetting?.value || '',
@@ -351,6 +368,15 @@ const handleHostMessage = (event) => {
     }
     case 'test-switch-state': {
       setTestSwitchButtonState(!!payload.active, payload.timeoutSeconds || 15);
+      break;
+    }
+    case 'update-progress': {
+      setUpdateProgress(
+        !!payload.active,
+        payload.text || '下载更新中...',
+        payload.percent ?? 0,
+        payload.speedText || '0.00 MB/s'
+      );
       break;
     }
     default:

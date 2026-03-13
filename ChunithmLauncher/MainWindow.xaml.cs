@@ -2,9 +2,12 @@
 using System.Collections.Generic;
 using System.Diagnostics;
 using System.IO;
+using System.IO.Compression;
 using System.Linq;
+using System.Net.Http;
 using System.Runtime.InteropServices;
 using System.Text.Json;
+using System.Text.Json.Serialization;
 using System.Text.RegularExpressions;
 using System.Threading;
 using System.Threading.Tasks;
@@ -22,6 +25,10 @@ public partial class MainWindow : Window
         PropertyNamingPolicy = JsonNamingPolicy.CamelCase,
         WriteIndented = true,
     };
+    private static readonly HttpClient UpdateHttpClient = CreateUpdateHttpClient();
+    private const string GithubRepoHomeUrl = "https://github.com/lichi7887/chunithmlauncher";
+    private const string GithubLatestReleaseApi = "https://api.github.com/repos/lichi7887/chunithmlauncher/releases/latest";
+    private const string GithubLatestReleasePage = "https://github.com/lichi7887/chunithmlauncher/releases/latest";
 
     private readonly List<DisplayInfo> _displays = new();
     private string? _primaryDisplayId;
@@ -166,6 +173,12 @@ public partial class MainWindow : Window
                 break;
             case "apply-recommended-segatools-gfx":
                 ApplyRecommendedSegatoolsGfxConfig();
+                break;
+            case "check-update":
+                _ = CheckForUpdatesAsync();
+                break;
+            case "open-github-home":
+                OpenGithubHomePage();
                 break;
             case "set-launch-mode":
                 if (message.Payload.TryGetProperty("mode", out var modeElement))
@@ -657,6 +670,371 @@ public partial class MainWindow : Window
         return false;
     }
 
+    private async Task CheckForUpdatesAsync()
+    {
+        SetStatus("正在检查更新...", "#5ee7ff");
+
+        GithubReleaseInfo? release;
+        try
+        {
+            using var response = await UpdateHttpClient.GetAsync(GithubLatestReleaseApi);
+            if (!response.IsSuccessStatusCode)
+            {
+                SetStatus("检查更新失败", "#ff5a6a");
+                System.Windows.MessageBox.Show(
+                    $"检查更新失败：HTTP {(int)response.StatusCode}",
+                    "检查更新",
+                    System.Windows.MessageBoxButton.OK,
+                    System.Windows.MessageBoxImage.Warning);
+                return;
+            }
+
+            var json = await response.Content.ReadAsStringAsync();
+            release = JsonSerializer.Deserialize<GithubReleaseInfo>(json);
+        }
+        catch
+        {
+            SetStatus("检查更新失败", "#ff5a6a");
+            System.Windows.MessageBox.Show(
+                "检查更新失败，请稍后重试。",
+                "检查更新",
+                System.Windows.MessageBoxButton.OK,
+                System.Windows.MessageBoxImage.Warning);
+            return;
+        }
+
+        if (release is null || string.IsNullOrWhiteSpace(release.TagName))
+        {
+            SetStatus("未获取到更新信息", "#ff5a6a");
+            System.Windows.MessageBox.Show(
+                "未获取到有效的版本信息。",
+                "检查更新",
+                System.Windows.MessageBoxButton.OK,
+                System.Windows.MessageBoxImage.Warning);
+            return;
+        }
+
+        var currentVersion = TryParseVersion(GetAppVersion());
+        var latestVersion = TryParseVersion(release.TagName);
+
+        if (currentVersion is null || latestVersion is null)
+        {
+            SetStatus("版本解析失败", "#ff5a6a");
+            System.Windows.MessageBox.Show(
+                $"版本解析失败。\n当前版本：{GetAppVersion()}\n最新版本：{release.TagName}",
+                "检查更新",
+                System.Windows.MessageBoxButton.OK,
+                System.Windows.MessageBoxImage.Warning);
+            return;
+        }
+
+        if (latestVersion <= currentVersion)
+        {
+            SetStatus("当前已是最新版本", "#7dffa0");
+            System.Windows.MessageBox.Show(
+                $"当前已是最新版本。\n当前版本：v{currentVersion}\n最新版本：v{latestVersion}",
+                "检查更新",
+                System.Windows.MessageBoxButton.OK,
+                System.Windows.MessageBoxImage.Information);
+            return;
+        }
+
+        var result = System.Windows.MessageBox.Show(
+            $"发现新版本 v{latestVersion}（当前 v{currentVersion}）。\n\n选择“是”自动下载并安装更新。\n选择“否”打开发布页面手动下载。",
+            "发现新版本",
+            System.Windows.MessageBoxButton.YesNoCancel,
+            System.Windows.MessageBoxImage.Question);
+
+        if (result == System.Windows.MessageBoxResult.Cancel)
+        {
+            SetStatus("已取消更新", "#ffb36a");
+            return;
+        }
+
+        if (result == System.Windows.MessageBoxResult.No)
+        {
+            if (TryOpenUrl(release.HtmlUrl ?? GithubLatestReleasePage))
+            {
+                SetStatus($"已打开 v{latestVersion} 发布页面", "#7dffa0");
+                return;
+            }
+
+            SetStatus("打开发布页面失败", "#ff5a6a");
+            return;
+        }
+
+        var asset = PickPreferredDownloadAsset(release);
+        if (asset is null || string.IsNullOrWhiteSpace(asset.BrowserDownloadUrl))
+        {
+            if (TryOpenUrl(release.HtmlUrl ?? GithubLatestReleasePage))
+            {
+                SetStatus("未找到可自动更新的资源，已打开发布页面", "#ffb36a");
+                return;
+            }
+
+            SetStatus("未找到可更新资源", "#ff5a6a");
+            return;
+        }
+
+        if (!IsZipAsset(asset.Name))
+        {
+            if (TryOpenUrl(asset.BrowserDownloadUrl))
+            {
+                SetStatus("该版本资源不支持自动安装，已打开下载链接", "#ffb36a");
+                return;
+            }
+
+            SetStatus("打开下载链接失败", "#ff5a6a");
+            return;
+        }
+
+        var ok = await TryDownloadAndInstallUpdateAsync(asset, latestVersion);
+        if (!ok)
+        {
+            if (TryOpenUrl(asset.BrowserDownloadUrl))
+            {
+                SetStatus("自动更新失败，已打开下载链接", "#ffb36a");
+            }
+            else
+            {
+                SetStatus("自动更新失败", "#ff5a6a");
+            }
+        }
+    }
+
+    private void OpenGithubHomePage()
+    {
+        const string url = GithubRepoHomeUrl;
+        if (TryOpenUrl(url))
+        {
+            SetStatus("已打开 GitHub 主页", "#7dffa0");
+            return;
+        }
+
+        SetStatus("打开 GitHub 主页失败", "#ff5a6a");
+    }
+
+    private static bool TryOpenUrl(string url)
+    {
+        try
+        {
+            Process.Start(new ProcessStartInfo
+            {
+                FileName = url,
+                UseShellExecute = true,
+            });
+            return true;
+        }
+        catch
+        {
+            return false;
+        }
+    }
+
+    private static HttpClient CreateUpdateHttpClient()
+    {
+        var client = new HttpClient();
+        client.DefaultRequestHeaders.UserAgent.ParseAdd("ChunithmLauncher/1.0");
+        client.DefaultRequestHeaders.Accept.ParseAdd("application/vnd.github+json");
+        return client;
+    }
+
+    private static Version? TryParseVersion(string raw)
+    {
+        if (string.IsNullOrWhiteSpace(raw))
+        {
+            return null;
+        }
+
+        var cleaned = raw.Trim();
+        if (cleaned.StartsWith("v", StringComparison.OrdinalIgnoreCase))
+        {
+            cleaned = cleaned[1..];
+        }
+
+        var plusIndex = cleaned.IndexOf('+');
+        if (plusIndex >= 0)
+        {
+            cleaned = cleaned[..plusIndex];
+        }
+
+        return Version.TryParse(cleaned, out var version) ? version : null;
+    }
+
+    private async Task<bool> TryDownloadAndInstallUpdateAsync(GithubReleaseAsset asset, Version latestVersion)
+    {
+        if (string.IsNullOrWhiteSpace(asset.BrowserDownloadUrl))
+        {
+            return false;
+        }
+
+        var tempRoot = Path.Combine(Path.GetTempPath(), "ChunithmLauncherUpdate", Guid.NewGuid().ToString("N"));
+        var extractRoot = Path.Combine(tempRoot, "extracted");
+
+        try
+        {
+            Directory.CreateDirectory(tempRoot);
+            Directory.CreateDirectory(extractRoot);
+
+            var fileName = string.IsNullOrWhiteSpace(asset.Name) ? "update.zip" : asset.Name!;
+            var downloadPath = Path.Combine(tempRoot, fileName);
+
+            SetStatus("正在下载更新包...", "#5ee7ff");
+            using (var response = await UpdateHttpClient.GetAsync(asset.BrowserDownloadUrl, HttpCompletionOption.ResponseHeadersRead))
+            {
+                if (!response.IsSuccessStatusCode)
+                {
+                    PostUpdateProgress(false, "下载失败", 0, "0.00 MB/s");
+                    return false;
+                }
+
+                var totalBytes = response.Content.Headers.ContentLength;
+                await using var responseStream = await response.Content.ReadAsStreamAsync();
+                await using var fileStream = File.Create(downloadPath);
+                var buffer = new byte[64 * 1024];
+                long readTotal = 0;
+                var sw = Stopwatch.StartNew();
+                var lastReportAt = TimeSpan.Zero;
+
+                while (true)
+                {
+                    var read = await responseStream.ReadAsync(buffer, 0, buffer.Length);
+                    if (read <= 0)
+                    {
+                        break;
+                    }
+
+                    await fileStream.WriteAsync(buffer, 0, read);
+                    readTotal += read;
+
+                    var now = sw.Elapsed;
+                    if (now - lastReportAt >= TimeSpan.FromMilliseconds(150))
+                    {
+                        lastReportAt = now;
+                        var mbps = now.TotalSeconds > 0 ? readTotal / now.TotalSeconds / 1024d / 1024d : 0;
+                        var percent = totalBytes.HasValue && totalBytes.Value > 0
+                            ? (int)Math.Clamp(readTotal * 100d / totalBytes.Value, 0, 100)
+                            : 0;
+                        var text = totalBytes.HasValue && totalBytes.Value > 0
+                            ? $"下载更新中... {percent}%"
+                            : $"下载更新中... {readTotal / 1024d / 1024d:F1} MB";
+                        PostUpdateProgress(true, text, percent, $"{mbps:F2} MB/s");
+                    }
+                }
+
+                var finalMbps = sw.Elapsed.TotalSeconds > 0 ? readTotal / sw.Elapsed.TotalSeconds / 1024d / 1024d : 0;
+                PostUpdateProgress(true, "下载完成，准备安装...", 100, $"{finalMbps:F2} MB/s");
+            }
+
+            SetStatus("正在解压更新包...", "#5ee7ff");
+            ZipFile.ExtractToDirectory(downloadPath, extractRoot, overwriteFiles: true);
+
+            var newExePath = Directory
+                .GetFiles(extractRoot, "ChunithmLauncher.exe", SearchOption.AllDirectories)
+                .FirstOrDefault();
+            if (string.IsNullOrWhiteSpace(newExePath))
+            {
+                return false;
+            }
+
+            var sourceDir = Path.GetDirectoryName(newExePath);
+            if (string.IsNullOrWhiteSpace(sourceDir))
+            {
+                return false;
+            }
+
+            var currentExePath = Process.GetCurrentProcess().MainModule?.FileName
+                ?? Path.Combine(AppContext.BaseDirectory, "ChunithmLauncher.exe");
+            var targetDir = AppContext.BaseDirectory.TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar);
+            var exeName = Path.GetFileName(currentExePath);
+            var currentPid = Process.GetCurrentProcess().Id;
+            var scriptPath = Path.Combine(tempRoot, "updater.cmd");
+
+            var script = string.Join(Environment.NewLine, new[]
+            {
+                "@echo off",
+                "setlocal",
+                $"set \"PID={currentPid}\"",
+                $"set \"SRC={sourceDir}\"",
+                $"set \"DST={targetDir}\"",
+                $"set \"EXE={exeName}\"",
+                ":wait_exit",
+                "tasklist /FI \"PID eq %PID%\" | find \"%PID%\" >nul",
+                "if not errorlevel 1 (",
+                "  timeout /t 1 /nobreak >nul",
+                "  goto wait_exit",
+                ")",
+                "xcopy \"%SRC%\\*\" \"%DST%\\\" /E /H /Y /I >nul",
+                "start \"\" \"%DST%\\%EXE%\"",
+                "endlocal",
+            });
+
+            File.WriteAllText(scriptPath, script);
+
+            Process.Start(new ProcessStartInfo
+            {
+                FileName = "cmd.exe",
+                Arguments = $"/c start \"\" \"{scriptPath}\"",
+                UseShellExecute = false,
+                CreateNoWindow = true,
+                WorkingDirectory = tempRoot,
+            });
+
+            SetStatus($"正在应用 v{latestVersion} 更新...", "#7dffa0");
+            System.Windows.MessageBox.Show(
+                $"更新包已下载，程序将退出并更新到 v{latestVersion}。",
+                "开始更新",
+                System.Windows.MessageBoxButton.OK,
+                System.Windows.MessageBoxImage.Information);
+
+            System.Windows.Application.Current.Shutdown();
+            return true;
+        }
+        catch
+        {
+            PostUpdateProgress(false, "更新失败", 0, "0.00 MB/s");
+            return false;
+        }
+    }
+
+    private void PostUpdateProgress(bool active, string text, int percent, string speedText)
+    {
+        PostMessage("update-progress", new
+        {
+            active,
+            text,
+            percent,
+            speedText,
+        });
+    }
+
+    private static bool IsZipAsset(string? assetName) =>
+        !string.IsNullOrWhiteSpace(assetName)
+        && assetName.EndsWith(".zip", StringComparison.OrdinalIgnoreCase);
+
+    private static GithubReleaseAsset? PickPreferredDownloadAsset(GithubReleaseInfo release)
+    {
+        if (release.Assets is null || release.Assets.Count == 0)
+        {
+            return null;
+        }
+
+        static bool Contains(string source, string value) =>
+            source.IndexOf(value, StringComparison.OrdinalIgnoreCase) >= 0;
+
+        var assets = release.Assets
+            .Where(a => !string.IsNullOrWhiteSpace(a.BrowserDownloadUrl))
+            .ToList();
+
+        var selected = assets.FirstOrDefault(a => Contains(a.Name ?? string.Empty, "win-x64") && Contains(a.Name ?? string.Empty, ".zip"))
+            ?? assets.FirstOrDefault(a => Contains(a.Name ?? string.Empty, "win-x64") && Contains(a.Name ?? string.Empty, ".exe"))
+            ?? assets.FirstOrDefault(a => Contains(a.Name ?? string.Empty, ".zip"))
+            ?? assets.FirstOrDefault(a => Contains(a.Name ?? string.Empty, ".exe"))
+            ?? assets.FirstOrDefault();
+
+        return selected;
+    }
+
     private async Task LaunchGameAsync()
     {
         if (_isLaunching)
@@ -691,16 +1069,16 @@ public partial class MainWindow : Window
             if (originalDisplayStates.Count == 0)
             {
                 originalDisplayStates = null;
-                SetStatus("智慧显示器：读取当前显示配置失败", "#ffb36a");
+                SetStatus("独占显示器：读取当前显示配置失败", "#ffb36a");
             }
             else
             {
                 var primaryToApply = _primaryDisplayId ?? deviceName;
-                SetStatus("智慧显示器：切换主显示器并启用仅主屏...", "#5ee7ff");
+                SetStatus("独占显示器：切换主显示器并启用仅主屏...", "#5ee7ff");
                 if (!DisplayModeHelper.TryApplyPrimaryOnly(primaryToApply))
                 {
                     originalDisplayStates = null;
-                    SetStatus("智慧显示器：切换失败，继续启动", "#ffb36a");
+                    SetStatus("独占显示器：切换失败，继续启动", "#ffb36a");
                 }
                 else
                 {
@@ -817,7 +1195,7 @@ public partial class MainWindow : Window
 
         DetectDisplays();
         SendInit();
-        SetStatus("智慧显示器：已恢复显示器布局", "#7dffa0");
+        SetStatus("独占显示器：已恢复显示器布局", "#7dffa0");
     }
 
     private static void ShowResolutionSwitchFailedDialog()
@@ -1218,6 +1596,27 @@ public partial class MainWindow : Window
         public string? ThemeColor { get; set; }
         public string? GameWindowTitle { get; set; }
         public string? BackgroundImagePath { get; set; }
+    }
+
+    private sealed class GithubReleaseInfo
+    {
+        [JsonPropertyName("tag_name")]
+        public string? TagName { get; set; }
+
+        [JsonPropertyName("html_url")]
+        public string? HtmlUrl { get; set; }
+
+        [JsonPropertyName("assets")]
+        public List<GithubReleaseAsset>? Assets { get; set; }
+    }
+
+    private sealed class GithubReleaseAsset
+    {
+        [JsonPropertyName("name")]
+        public string? Name { get; set; }
+
+        [JsonPropertyName("browser_download_url")]
+        public string? BrowserDownloadUrl { get; set; }
     }
 
     private readonly record struct DisplayMode(int Width, int Height, int Frequency)

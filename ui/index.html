@@ -25,6 +25,16 @@
       </div>
     </header>
 
+    <div class="update-progress-panel" id="updateProgressPanel">
+      <div class="update-progress-head">
+        <span id="updateProgressText">下载更新中...</span>
+        <span id="updateProgressSpeed">0.00 MB/s</span>
+      </div>
+      <div class="update-progress-track">
+        <div class="update-progress-fill" id="updateProgressFill"></div>
+      </div>
+    </div>
+
     <section class="layout">
       <aside class="status-card reveal" style="--d:120ms">
         <div class="card-title">运行状态</div>
@@ -38,13 +48,16 @@
         </div>
         <div class="stat">
           <div class="stat-label">模式</div>
-          <div class="segmented" id="launchMode">
-            <button class="seg active" data-mode="smart">智能切换</button>
-            <button class="seg" data-mode="manual">仅启动</button>
+          <div class="mode-row">
+            <div class="segmented" id="launchMode">
+              <button class="seg active" data-mode="smart">智能切换</button>
+              <button class="seg" data-mode="manual">仅启动</button>
+            </div>
+            <button class="btn small" id="btnTestSwitch" data-state="test">测试切换</button>
           </div>
         </div>
         <div class="stat">
-          <div class="stat-label">智慧显示器</div>
+          <div class="stat-label">独占显示器</div>
           <label class="smart-display-toggle" title="启动时将设置中的主显示器切换为 Windows 主显示器，并仅在主显示器显示；游戏退出后恢复。">
             <input type="checkbox" id="smartDisplayToggle" />
             <span>启用</span>
@@ -58,10 +71,6 @@
 
       <section class="hero reveal" style="--d:240ms">
         <div class="hero-card">
-          <div class="hero-actions">
-            <button class="btn primary" id="btnLaunch">启动游戏</button>
-            <button class="btn" id="btnTestSwitch" data-state="test">测试切换</button>
-          </div>
           <div class="hover-info">
             <div class="hover-item" data-tip="已选择的 start.bat 路径">
               <span>start.bat</span>
@@ -75,6 +84,9 @@
               <span>原始分辨率</span>
               <span class="mono" id="originalModeHover">未读取</span>
             </div>
+          </div>
+          <div class="hero-actions">
+            <button class="btn primary launch-button-large" id="btnLaunch">启动游戏</button>
           </div>
         </div>
       </section>
@@ -169,6 +181,18 @@
               <input type="text" id="bgImageInput" placeholder="例如 C:\\images\\bg.jpg 或 https://..." />
               <button class="btn small" id="btnBrowseBg">浏览</button>
               <button class="btn small" id="btnApplyBg">应用</button>
+            </div>
+          </div>
+        </div>
+
+        <div class="panel">
+          <div class="panel-title">关于</div>
+          <div class="field">
+            <div class="about-actions-row">
+              <span class="about-action-label">项目主页</span>
+              <button class="btn small" id="btnOpenGithubHome">GitHub 主页</button>
+              <span class="about-action-label">版本更新</span>
+              <button class="btn small" id="btnCheckUpdate">检查更新</button>
             </div>
           </div>
         </div>

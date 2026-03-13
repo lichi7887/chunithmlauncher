@@ -2,7 +2,7 @@
   [string]$Configuration = "Release",
   [string]$Runtime = "win-x64",
   [string]$OutputRoot = ".\\artifacts\\publish",
-  [string]$VersionPrefix = "1.1.2",
+  [string]$VersionPrefix = "1.2.0",
   [bool]$EnableReadyToRun = $false
 )
 

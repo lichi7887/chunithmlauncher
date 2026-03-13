@@ -163,6 +163,9 @@ public partial class MainWindow : Window
             case "open-segatools-ini":
                 OpenSegatoolsIniInVsCode();
                 break;
+            case "apply-recommended-segatools-gfx":
+                ApplyRecommendedSegatoolsGfxConfig();
+                break;
             case "set-launch-mode":
                 if (message.Payload.TryGetProperty("mode", out var modeElement))
                 {
@@ -374,23 +377,9 @@ public partial class MainWindow : Window
 
     private void OpenSegatoolsIniInVsCode()
     {
-        if (string.IsNullOrWhiteSpace(_startBatPath))
+        var iniPath = TryGetSegatoolsIniPath();
+        if (iniPath is null)
         {
-            SetStatus("尚未选择 start.bat", "#ff5a6a");
-            return;
-        }
-
-        var gameDir = Path.GetDirectoryName(_startBatPath);
-        if (string.IsNullOrWhiteSpace(gameDir))
-        {
-            SetStatus("无法解析游戏目录", "#ff5a6a");
-            return;
-        }
-
-        var iniPath = Path.Combine(gameDir, "segatools.ini");
-        if (!File.Exists(iniPath))
-        {
-            SetStatus("未找到 segatools.ini", "#ff5a6a");
             return;
         }
 
@@ -422,6 +411,183 @@ public partial class MainWindow : Window
 
             SetStatus("未检测到可用编辑器，已打开 VS Code 下载页", "#ff5a6a");
         }
+    }
+
+    private void ApplyRecommendedSegatoolsGfxConfig()
+    {
+        var iniPath = TryGetSegatoolsIniPath();
+        if (iniPath is null)
+        {
+            return;
+        }
+
+        var result = System.Windows.MessageBox.Show(
+            "我们建议将segatools的gfx部分更改为\n[gfx]\n\nwindowed=1\n\nframed=0\n\nmonitor=0\n\n需要进行更改吗？",
+            "使用推荐配置",
+            System.Windows.MessageBoxButton.OKCancel,
+            System.Windows.MessageBoxImage.Question);
+
+        if (result != System.Windows.MessageBoxResult.OK)
+        {
+            return;
+        }
+
+        try
+        {
+            var content = File.ReadAllText(iniPath);
+            var updated = ApplyRecommendedGfxSection(content);
+            if (string.Equals(content, updated, StringComparison.Ordinal))
+            {
+                SetStatus("segatools.ini 已是推荐配置", "#7dffa0");
+                return;
+            }
+
+            File.WriteAllText(iniPath, updated);
+            SetStatus("已应用 segatools 推荐配置", "#7dffa0");
+        }
+        catch
+        {
+            SetStatus("修改 segatools.ini 失败", "#ff5a6a");
+        }
+    }
+
+    private string? TryGetSegatoolsIniPath()
+    {
+        if (string.IsNullOrWhiteSpace(_startBatPath))
+        {
+            SetStatus("尚未选择 start.bat", "#ff5a6a");
+            return null;
+        }
+
+        var gameDir = Path.GetDirectoryName(_startBatPath);
+        if (string.IsNullOrWhiteSpace(gameDir))
+        {
+            SetStatus("无法解析游戏目录", "#ff5a6a");
+            return null;
+        }
+
+        var iniPath = Path.Combine(gameDir, "segatools.ini");
+        if (!File.Exists(iniPath))
+        {
+            SetStatus("未找到 segatools.ini", "#ff5a6a");
+            return null;
+        }
+
+        return iniPath;
+    }
+
+    private static string ApplyRecommendedGfxSection(string content)
+    {
+        var lines = content.Replace("\r\n", "\n").Replace('\r', '\n').Split('\n').ToList();
+        var gfxStart = -1;
+        var gfxEnd = lines.Count;
+
+        for (var i = 0; i < lines.Count; i++)
+        {
+            if (string.Equals(lines[i].Trim(), "[gfx]", StringComparison.OrdinalIgnoreCase))
+            {
+                gfxStart = i;
+                break;
+            }
+        }
+
+        if (gfxStart < 0)
+        {
+            if (lines.Count > 0 && !string.IsNullOrWhiteSpace(lines[^1]))
+            {
+                lines.Add(string.Empty);
+            }
+
+            lines.Add("[gfx]");
+            lines.Add("windowed=1");
+            lines.Add("framed=0");
+            lines.Add("monitor=0");
+            return string.Join(Environment.NewLine, lines);
+        }
+
+        for (var i = gfxStart + 1; i < lines.Count; i++)
+        {
+            var trimmed = lines[i].Trim();
+            if (trimmed.StartsWith("[", StringComparison.Ordinal) && trimmed.EndsWith("]", StringComparison.Ordinal))
+            {
+                gfxEnd = i;
+                break;
+            }
+        }
+
+        var foundWindowed = false;
+        var foundFramed = false;
+        var foundMonitor = false;
+
+        for (var i = gfxStart + 1; i < gfxEnd; i++)
+        {
+            var trimmed = lines[i].Trim();
+            if (string.IsNullOrWhiteSpace(trimmed) || trimmed.StartsWith(";", StringComparison.Ordinal))
+            {
+                continue;
+            }
+
+            if (TryMatchIniKey(trimmed, "windowed"))
+            {
+                lines[i] = ReplaceIniValue(lines[i], "1");
+                foundWindowed = true;
+                continue;
+            }
+
+            if (TryMatchIniKey(trimmed, "framed"))
+            {
+                lines[i] = ReplaceIniValue(lines[i], "0");
+                foundFramed = true;
+                continue;
+            }
+
+            if (TryMatchIniKey(trimmed, "monitor"))
+            {
+                lines[i] = ReplaceIniValue(lines[i], "0");
+                foundMonitor = true;
+            }
+        }
+
+        var insertIndex = gfxEnd;
+        if (!foundWindowed)
+        {
+            lines.Insert(insertIndex++, "windowed=1");
+        }
+
+        if (!foundFramed)
+        {
+            lines.Insert(insertIndex++, "framed=0");
+        }
+
+        if (!foundMonitor)
+        {
+            lines.Insert(insertIndex, "monitor=0");
+        }
+
+        return string.Join(Environment.NewLine, lines);
+    }
+
+    private static bool TryMatchIniKey(string line, string key)
+    {
+        var equalsIndex = line.IndexOf('=');
+        if (equalsIndex <= 0)
+        {
+            return false;
+        }
+
+        var currentKey = line[..equalsIndex].Trim();
+        return string.Equals(currentKey, key, StringComparison.OrdinalIgnoreCase);
+    }
+
+    private static string ReplaceIniValue(string originalLine, string value)
+    {
+        var equalsIndex = originalLine.IndexOf('=');
+        if (equalsIndex < 0)
+        {
+            return originalLine;
+        }
+
+        return $"{originalLine[..equalsIndex]}={value}";
     }
 
     private static bool TryOpenInPreferredEditor(string filePath)

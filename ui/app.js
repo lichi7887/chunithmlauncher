@@ -244,6 +244,7 @@ onClick('btnSave', () => {
 
 onClick('btnPickBatSetting', () => post('pick-start-bat'));
 onClick('btnEditSegatoolsIni', () => post('open-segatools-ini'));
+onClick('btnApplyRecommendedSegatools', () => post('apply-recommended-segatools-gfx'));
 onClick('btnDetectDisplaysSetting', () => post('detect-displays'));
 onClick('btnReadCurrentSetting', () => post('read-current-mode'));
 onClick('btnSaveSettings', () => {
